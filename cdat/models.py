@@ -35,6 +35,16 @@ class Client(models.Model):
         return "%s" % self.uw_client_id
 
 
+class ClientDuplicate(models.Model):
+    uw_client_id = models.IntegerField()
+    assessment_date = models.DateTimeField()
+    assessing_organization = models.CharField(max_length=300)
+    assessment_score = models.IntegerField()
+
+    def __str__(self):
+        return "%s" % self.uw_client_id
+
+
 class SheetUpload(models.Model):
     upload_date = models.DateTimeField(auto_now_add=True)
     vispdat_file = models.FileField()

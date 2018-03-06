@@ -17,6 +17,7 @@ def ingest_sheets(modeladmin, request, queryset):
         c.execute("BEGIN TRANSACTION;")
         c.execute("DELETE FROM cdat_clientraw;")
         c.execute("DELETE FROM cdat_client;")
+        c.execute("DELETE FROM cdat_clientduplicate;")
         c.execute("DELETE FROM cdat_home;")
         c.execute("COMMIT;")
     sheet_files = SheetUpload.objects.last()
@@ -74,6 +75,9 @@ def ingest_sheets(modeladmin, request, queryset):
         c.execute("INSERT INTO cdat_client (uw_client_id, assessment_date, assessing_organization, assessment_score, individual_or_family) SELECT MAX(uw_client_id), MAX(assessment_date), assessing_organization, assessment_score, individual_or_family FROM cdat_clientraw GROUP BY uw_client_id, assessing_organization, assessment_score, individual_or_family;")
     with connection.cursor() as c:
         c.execute("UPDATE cdat_client C SET ce_status_id = ces_code FROM cdat_home H WHERE H.uw_client_id = C.uw_client_id;")
+    with connection.cursor() as c:
+        c.execute("INSERT INTO cdat_clientduplicate (uw_client_id, assessment_date, assessing_organization, assessment_score) SELECT uw_client_id, assessment_date, assessing_organization, assessment_score FROM cdat_clientraw WHERE uw_client_id IN (SELECT uw_client_id FROM cdat_clientraw GROUP BY uw_client_id, assessment_date HAVING COUNT(*) > 1) ORDER BY uw_client_id, assessment_date;")
+
 
     sheet_files.fvispdat_file.delete()
     sheet_files.vispdat_file.delete()
@@ -85,25 +89,8 @@ def ingest_sheets(modeladmin, request, queryset):
 ingest_sheets.short_description = 'Ingest uploaded sheets'
 
 
-def export_duplicates(modeladmin, request, queryset):
-    with connection.cursor() as c:
-        c.execute("SELECT uw_client_id, assessment_date, assessing_organization, assessment_score FROM cdat_clientraw WHERE uw_client_id IN (SELECT uw_client_id FROM cdat_clientraw GROUP BY uw_client_id, assessment_date HAVING COUNT(*) > 1) ORDER BY uw_client_id, assessment_date;")
-        duplicate_assessments = c.fetchall()
-
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = 'attachment; filename="duplicates.csv"'
-    writer = csv.writer(response, delimiter=',')
-    writer.writerow(['client_id', 'assessment_date', 'assessing_org', 'assessment_score'])
-    for row in duplicate_assessments:
-        writer.writerow([row[0], row[1], row[2], row[3]])
-    return response
-
-export_duplicates.short_description = 'Export duplicates'
-
-
 class ClientAdmin(admin.ModelAdmin):
     list_display = ['uw_client_id', 'assessment_date', 'assessing_organization', 'assessment_score', 'individual_or_family', 'ce_status']
-    actions = [export_duplicates]
 
 
 class UploadAdmin(admin.ModelAdmin):
@@ -111,5 +98,10 @@ class UploadAdmin(admin.ModelAdmin):
     actions = [ingest_sheets]
 
 
+class DupeAdmin(admin.ModelAdmin):
+    list_display = ['uw_client_id', 'assessment_date', 'assessing_organization', 'assessment_score']
+
+
 admin.site.register(Client, ClientAdmin)
 admin.site.register(SheetUpload, UploadAdmin)
+admin.site.register(ClientDuplicate, DupeAdmin)
