@@ -1,0 +1,6 @@
+Django==2.0.2
+django-bootstrap3==9.1.0
+gunicorn==19.7.1
+psycopg2==2.7.4
+pytz==2018.3
+xlrd==1.1.0
